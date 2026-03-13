@@ -2,6 +2,6 @@ streamlit
 pandas
 numpy
 altair
-st-aggrid
+streamlit-aggrid
 gspread
 google-auth
