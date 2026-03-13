@@ -18,6 +18,29 @@ except ImportError:
 # --- CONFIGURACIÓN DE PÁGINA Y ESTILOS ---
 st.set_page_config(page_title="Matanza Óptima", layout="wide", page_icon="🐖")
 
+# ==========================================
+# 🔒 SISTEMA DE SEGURIDAD (CONTRASEÑA)
+# ==========================================
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("<h1 style='text-align: center; color: #1b5e20;'>🔒 Acceso Restringido</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Por favor, introduce la clave para acceder al simulador.</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        pwd = st.text_input("Contraseña:", type="password")
+        if st.button("Entrar", use_container_width=True):
+            if pwd == "comerprod26":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Contraseña incorrecta")
+    # Si no está autenticado, paramos la ejecución aquí. No se carga nada más.
+    st.stop()
+# ==========================================
+
 st.markdown("""
     <style>
     [data-testid="stMetric"] { background-color: #f8f9fa; border-top: 4px solid #2e7d32; border-radius: 5px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: #333; }
@@ -30,10 +53,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'PEGAR_AQUI_URL_PRIVADA_ESCANDALLOS'
+URL_VENTAS = 'PEGAR_AQUI_URL_PRIVADA_VENTAS'
+URL_EQUIVALENCIAS = 'PEGAR_AQUI_URL_PRIVADA_EQUIVALENCIAS'
+URL_SUSTITUCIONES = 'PEGAR_AQUI_URL_PRIVADA_SUSTITUCIONES'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
