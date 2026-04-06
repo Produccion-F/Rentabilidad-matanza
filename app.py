@@ -52,10 +52,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
 # =====================================================================
-URL_ESCANDALLOS = 'PEGAR_AQUI_URL_PRIVADA_ESCANDALLOS'
-URL_VENTAS = 'PEGAR_AQUI_URL_PRIVADA_VENTAS'
-URL_EQUIVALENCIAS = 'PEGAR_AQUI_URL_PRIVADA_EQUIVALENCIAS'
-URL_SUSTITUCIONES = 'PEGAR_AQUI_URL_PRIVADA_SUSTITUCIONES'
+URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
+URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
+URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
+URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
