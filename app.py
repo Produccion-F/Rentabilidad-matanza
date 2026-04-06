@@ -52,10 +52,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'PEGAR_AQUI_URL_PRIVADA_ESCANDALLOS'
+URL_VENTAS = 'PEGAR_AQUI_URL_PRIVADA_VENTAS'
+URL_EQUIVALENCIAS = 'PEGAR_AQUI_URL_PRIVADA_EQUIVALENCIAS'
+URL_SUSTITUCIONES = 'PEGAR_AQUI_URL_PRIVADA_SUSTITUCIONES'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
@@ -852,11 +852,9 @@ else:
             with st.spinner("Procesando 5 simulaciones en paralelo usando el motor principal. Un momento..."):
                 resultados_ms = []
                 for i, param in enumerate(sim_params):
-                    # Invocamos la función original, obligándola a llegar al target de cerdos de este escenario
                     df_sim, _, _, _, _, _, _, _ = run_simulation(esc, ven, eq, sus, config, forced_pigs_target=param['pigs'], manual_overrides=st.session_state.manual_prices)
 
                     if not df_sim.empty:
-                        # Cálculos financieros paralelos para no pisar las variables de la Pestaña 1
                         t_cerdos = len(df_sim)
                         t_ventas = df_sim['Precio_Total'].sum()
                         t_coste_kg = param['price'] + param['cost']
@@ -887,12 +885,36 @@ else:
                         })
 
                 if resultados_ms:
-                    # Reconstruimos una tabla limpia y ordenada
                     df_comparativa = pd.DataFrame({'Métrica': resultados_ms[0]['Métrica']})
                     for res in resultados_ms:
                         esc_name = list(res.keys())[1]
                         df_comparativa[esc_name] = res[esc_name]
 
                     st.markdown("#### 🏆 Resultados de la Comparativa")
-                    st.dataframe(df_comparativa, use_container_width=True, hide_index=True)
+                    
+                    # --- FUNCIÓN PARA COLOREAR EN VERDE/ROJO ---
+                    def colorear_metricas(row):
+                        estilos = [''] * len(row)
+                        # Solo aplicamos color a las filas de Beneficio y Rentabilidad
+                        if 'Beneficio Total' in str(row['Métrica']) or 'Rentabilidad por Kg' in str(row['Métrica']):
+                            for i, col_name in enumerate(row.index):
+                                if 'Escenario' in str(col_name):
+                                    val_str = str(row[col_name])
+                                    # Limpiamos el texto para poder leer el número matemáticamente
+                                    val_limpio = val_str.replace('€', '').replace('/kg', '').replace(',', '').strip()
+                                    try:
+                                        val_num = float(val_limpio)
+                                        # Aplicamos color según sea positivo o negativo
+                                        if val_num > 0.0001:
+                                            estilos[i] = 'color: #2e7d32; font-weight: bold;' # Verde
+                                        elif val_num < -0.0001:
+                                            estilos[i] = 'color: #d32f2f; font-weight: bold;' # Rojo
+                                    except:
+                                        pass
+                        return estilos
+                    # -------------------------------------------
+                    
+                    # Aplicamos el estilo a la tabla antes de mostrarla
+                    df_estilizado = df_comparativa.style.apply(colorear_metricas, axis=1)
+                    st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                     st.success("¡Simulaciones completadas con éxito!")
