@@ -6,7 +6,7 @@ import unicodedata
 import gspread
 from google.oauth2.service_account import Credentials
 import re
-import json # NUEVO: Para leer el JSON de los secrets
+import json
 
 # Intentamos importar AgGrid.
 try:
@@ -37,7 +37,6 @@ if not st.session_state.authenticated:
                 st.rerun()
             else:
                 st.error("❌ Contraseña incorrecta")
-    # Si no está autenticado, paramos la ejecución aquí. No se carga nada más.
     st.stop()
 # ==========================================
 
@@ -63,7 +62,6 @@ URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qml
 def init_gcp_connection():
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        # Convertimos el string gigante en formato JSON a un diccionario que Python entienda
         creds_dict = json.loads(st.secrets["gcp_service_account"])
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(credentials)
@@ -74,12 +72,9 @@ def init_gcp_connection():
 def get_df_from_gspread(url):
     gc = init_gcp_connection()
     if not gc: return pd.DataFrame()
-    
-    # Extraer el ID de la pestaña (gid) de la URL
     base_url = url.split('#')[0]
     match = re.search(r'gid=([0-9]+)', url)
     gid = int(match.group(1)) if match else 0
-    
     try:
         sh = gc.open_by_url(base_url)
         ws = next((w for w in sh.worksheets() if w.id == gid), sh.sheet1)
@@ -167,7 +162,6 @@ def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=
 def load_and_clean_data_raw():
     errores = []
     
-    # 1. ESCANDALLOS
     try:
         df_e = get_df_from_gspread(URL_ESCANDALLOS)
         rename_map = {}
@@ -189,7 +183,6 @@ def load_and_clean_data_raw():
             df_e['Pct_Rendimiento'] = np.where(df_e['Total_Grupo']>0, df_e['Peso']/df_e['Total_Grupo'], 0)
     except Exception as e: return None, None, None, None, [f"Error Fatal Escandallos: {e}"]
 
-    # 2. VENTAS
     try:
         df_v = get_df_from_gspread(URL_VENTAS)
         rename_map_v = {}
@@ -207,7 +200,6 @@ def load_and_clean_data_raw():
             if c in df_v.columns: df_v[c] = df_v[c].apply(clean_float)
     except Exception as e: return None, None, None, None, [f"Error Fatal Ventas: {e}"]
 
-    # 3. EQUIVALENCIAS
     try:
         df_eq = get_df_from_gspread(URL_EQUIVALENCIAS)
         rename_map_eq = {}
@@ -223,7 +215,6 @@ def load_and_clean_data_raw():
         df_eq = pd.DataFrame()
         errores.append(f"Aviso Equivalencias: {e}")
 
-    # 4. SUSTITUCIONES
     try:
         df_raw = get_df_from_gspread(URL_SUSTITUCIONES)
         col_origen = None
@@ -418,7 +409,7 @@ def run_simulation(df_esc, df_ven, df_eq, df_sust, target_config, forced_pigs_ta
     for _, row in df_rechazados.iterrows():
         sobrantes_temp.append({'Familia': 'Desconocido', 'Codigo': str(row.get('Codigo')), 'Nombre': str(row.get('Articulo')), 'Tipo': 'RECHAZADO (Congelado 0€)', 'Kg': row.get('Kilos'), 'Motivo': 'Sin precio referencia (Directo/Indir)'})
 
-    count_vinculados_mapeo = 0 # Inicialización asegurada aquí
+    count_vinculados_mapeo = 0 
     ventas_dict = df_ven_proc.to_dict('records')
 
     for venta in ventas_dict:
@@ -582,14 +573,14 @@ def run_simulation(df_esc, df_ven, df_eq, df_sust, target_config, forced_pigs_ta
 
     return pd.DataFrame(cerdos), pd.DataFrame(sobrantes_finales), log, cajones, warnings_mapping, count_vinculados_mapeo, pd.DataFrame(auditoria_secundarios), recetas
 
-# --- UI ---
+# --- UI PRINCIPAL ---
 st.title("🐖 Rentabilidad Matanza")
 if 'raw_data' not in st.session_state: st.session_state.raw_data = None
 if 'desgloses_db' not in st.session_state: st.session_state.desgloses_db = {}
 if 'manual_prices' not in st.session_state: st.session_state.manual_prices = {}
 
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.header("⚙️ Configuración Global")
     
     with st.expander("🛠️ Simulador de Precios (Lab)", expanded=False):
         st.caption("Sobrescribe precios reales para simular escenarios.")
@@ -623,15 +614,14 @@ with st.sidebar:
                 st.success("Datos actualizados correctamente.")
 
     st.divider()
-    precio_compra = st.number_input("Precio Canal (€/kg)", value=2.10, step=0.01, min_value=0.0)
-    coste_ind = st.number_input("Coste Ind. (€/kg)", value=0.35, step=0.01, min_value=0.0)
+    precio_compra = st.number_input("Precio Canal (€/kg) [Pestaña 1]", value=2.10, step=0.01, min_value=0.0)
+    coste_ind = st.number_input("Coste Ind. (€/kg) [Pestaña 1]", value=0.35, step=0.01, min_value=0.0)
 
     st.divider()
-    modo_forzado = st.checkbox("🔮 Simular N Cerdos (Forzar producción)", value=False)
+    modo_forzado = st.checkbox("🔮 Simular N Cerdos (Forzar)", value=False)
     target_pigs = 0
     if modo_forzado:
         target_pigs = st.number_input("Objetivo de Cerdos a Simular:", min_value=1, value=5000, step=100)
-        st.caption(f"⚠️ Forzará la venta con el peor precio histórico.")
 
     st.divider()
     peso = st.number_input("Peso Canal Neto (Kg)", value=93.00, min_value=0.1)
@@ -646,191 +636,263 @@ with st.sidebar:
     st.info(f"Total Kg: {sum(config.values()):.2f}")
 
 if st.session_state.raw_data is None:
-    st.info("👋 Para empezar, pon tus URLs privadas en el código y pulsa 'Cargar Datos'.")
+    st.info("👋 Para empezar, pulsa 'Cargar Datos' en el panel lateral.")
 else:
     esc, ven, eq, sus, err = st.session_state.raw_data
-    df, df_s, logs, cajones_res, warnings_map, total_mapeados, df_audit_sec, recetas_db = run_simulation(esc, ven, eq, sus, config, target_pigs, st.session_state.manual_prices)
 
-    if not df.empty: df['Precio_Medio'] = df['Precio_Total'] / peso
+    # --- CREACIÓN DE LAS DOS PESTAÑAS ---
+    tab_main, tab_sim = st.tabs(["🔬 Análisis Detallado", "📊 Comparador de Escenarios (What-If)"])
 
-    if total_mapeados > 0: st.success(f"✅ Vinculaciones por equivalencia: {total_mapeados}")
-    if warnings_map:
-        with st.expander("⚠️ Avisos de Equivalencias", expanded=False):
-            for w in warnings_map: st.warning(w)
+    # =========================================================
+    # PESTAÑA 1: EL PROGRAMA ORIGINAL INTACTO
+    # =========================================================
+    with tab_main:
+        df, df_s, logs, cajones_res, warnings_map, total_mapeados, df_audit_sec, recetas_db = run_simulation(esc, ven, eq, sus, config, target_pigs, st.session_state.manual_prices)
 
-    coste_total_kg = precio_compra + coste_ind
-    if not df.empty:
-        total_cerdos = len(df); total_ventas = df['Precio_Total'].sum(); total_costes = total_cerdos * peso * coste_total_kg; beneficio_total = total_ventas - total_costes
-        total_kg_canal = total_cerdos * peso
-        precio_medio_global = total_ventas / total_kg_canal if total_kg_canal > 0 else 0
-        margen_pct = (beneficio_total / total_ventas) * 100 if total_ventas > 0 else 0
-        rentabilidad_kg_global = precio_medio_global - coste_total_kg
+        if not df.empty: df['Precio_Medio'] = df['Precio_Total'] / peso
 
-        with st.expander("🔍 Buscador y Filtros de Trazabilidad (Resultados)", expanded=False):
-            c_fil1, c_fil2 = st.columns(2)
-            filtro_art = c_fil1.text_input("Filtrar por Artículo (Código/Nombre):").strip().lower()
-            filtro_cli = c_fil2.text_input("Filtrar por Cliente:").strip().lower()
-            
-            df_filtered = df.copy()
-            if filtro_art or filtro_cli:
-                def cumple_filtro(detalles_lista):
-                    if not isinstance(detalles_lista, list): return False
-                    for d in detalles_lista:
-                        if not isinstance(d, dict): continue
-                        txt_art = normalizar_texto(str(d.get('A','')) + " " + str(d.get('Cod','')))
-                        txt_cli = normalizar_texto(str(d.get('C','')))
-                        match_art = True if not normalizar_texto(filtro_art) else (normalizar_texto(filtro_art) in txt_art)
-                        match_cli = True if not normalizar_texto(filtro_cli) else (normalizar_texto(filtro_cli) in txt_cli)
-                        if match_art and match_cli: return True
-                    return False
+        if total_mapeados > 0: st.success(f"✅ Vinculaciones por equivalencia: {total_mapeados}")
+        if warnings_map:
+            with st.expander("⚠️ Avisos de Equivalencias", expanded=False):
+                for w in warnings_map: st.warning(w)
 
-                mask = df_filtered['Detalles'].apply(cumple_filtro)
-                df_filtered = df_filtered[mask]
-                st.info(f"🔎 Resultados: {len(df_filtered)} cerdos (de {total_cerdos})")
+        coste_total_kg = precio_compra + coste_ind
+        if not df.empty:
+            total_cerdos = len(df); total_ventas = df['Precio_Total'].sum(); total_costes = total_cerdos * peso * coste_total_kg; beneficio_total = total_ventas - total_costes
+            total_kg_canal = total_cerdos * peso
+            precio_medio_global = total_ventas / total_kg_canal if total_kg_canal > 0 else 0
+            margen_pct = (beneficio_total / total_ventas) * 100 if total_ventas > 0 else 0
+            rentabilidad_kg_global = precio_medio_global - coste_total_kg
 
-        st.markdown("### 📈 Balance General")
-
-        k1, k2, k3, k4, k5, k6 = st.columns(6)
-        k1.metric("🐷 Cerdos", f"{total_cerdos:,.0f}")
-        k2.metric("💰 Precio Venta", f"{precio_medio_global:.2f} €/kg")
-        k3.metric("📉 Coste Total", f"{coste_total_kg:.2f} €/kg", delta="Coste fijo", delta_color="inverse")
-        k4.metric("💵 Beneficio", f"{beneficio_total:,.2f} €")
-        k5.metric("📈 Rentabilidad", f"{rentabilidad_kg_global:.2f} €/kg")
-        k6.metric("📊 Margen", f"{margen_pct:.2f}%")
-
-        # --- INDICADORES DE CORTE PRIMARIO GLOBALES ---
-        st.markdown("#### 🍖 Precio Medio por Corte Primario (€/kg)")
-        cp_globales = {}
-        for dets in df['Detalles']:
-            if isinstance(dets, list):
-                for d in dets:
-                    if isinstance(d, dict):
-                        f = d.get('F', 'Otros')
-                        if f not in cp_globales: cp_globales[f] = []
-                        cp_globales[f].append(d.get('CP', 0))
-        
-        cp_medios_glob = {k: (sum(v)/len(v) if v else 0) for k, v in cp_globales.items()}
-        familias_orden = ['Jamon', 'Paleta', 'Chuleta', 'Panceta', 'Cabeza', 'Papada']
-        cp_cols = st.columns(6)
-        for idx, fam_name in enumerate(familias_orden):
-            val = cp_medios_glob.get(fam_name, 0)
-            label = "Chuleta/Lomo" if fam_name == "Chuleta" else fam_name
-            cp_cols[idx].metric(label, f"{val:.2f} €")
-        # ----------------------------------------------
-
-        found_stop = False
-        for l in logs:
-            if "A partir del cerdo" in l: st.warning(l)
-            if "Se agotó" in l: parte = l.split("Se agotó:")[1].strip(); st.error(f"🛑 **ATENCIÓN:** Producción detenida en cerdo {total_cerdos} (FALTAN KG DE {parte.upper()})."); found_stop = True
-        if not found_stop: st.info(f"ℹ️ Estado final: {logs[-1]}")
-
-        with st.expander("📊 Detalle de lote (Gráficos e Inspector)", expanded=True):
-            st.subheader("Evolución de Rentabilidad por Grupos")
-            df_viz = df_filtered if (filtro_art or filtro_cli) else df
-            
-            if df_viz.empty: st.warning("No hay datos para mostrar con los filtros actuales.")
-            else:
-                lote_size = st.number_input("Tamaño Grupo", min_value=1, value=100, step=1)
-                df_viz = df_viz.reset_index(drop=True)
-                df_viz['Grupo_ID'] = df_viz.index // lote_size
-                df_viz['Grupo_Label'] = df_viz['Grupo_ID'].apply(lambda x: f"Grupo {x+1}")
+            with st.expander("🔍 Buscador y Filtros de Trazabilidad (Resultados)", expanded=False):
+                c_fil1, c_fil2 = st.columns(2)
+                filtro_art = c_fil1.text_input("Filtrar por Artículo (Código/Nombre):").strip().lower()
+                filtro_cli = c_fil2.text_input("Filtrar por Cliente:").strip().lower()
                 
-                grp_stats = df_viz.groupby('Grupo_Label').agg({'Precio_Medio': 'mean'}).reset_index()
-                grp_stats['Coste'] = coste_total_kg; grp_stats['Rentabilidad'] = grp_stats['Precio_Medio'] - coste_total_kg
+                df_filtered = df.copy()
+                if filtro_art or filtro_cli:
+                    def cumple_filtro(detalles_lista):
+                        if not isinstance(detalles_lista, list): return False
+                        for d in detalles_lista:
+                            if not isinstance(d, dict): continue
+                            txt_art = normalizar_texto(str(d.get('A','')) + " " + str(d.get('Cod','')))
+                            txt_cli = normalizar_texto(str(d.get('C','')))
+                            match_art = True if not normalizar_texto(filtro_art) else (normalizar_texto(filtro_art) in txt_art)
+                            match_cli = True if not normalizar_texto(filtro_cli) else (normalizar_texto(filtro_cli) in txt_cli)
+                            if match_art and match_cli: return True
+                        return False
+
+                    mask = df_filtered['Detalles'].apply(cumple_filtro)
+                    df_filtered = df_filtered[mask]
+                    st.info(f"🔎 Resultados: {len(df_filtered)} cerdos (de {total_cerdos})")
+
+            st.markdown("### 📈 Balance General")
+            k1, k2, k3, k4, k5, k6 = st.columns(6)
+            k1.metric("🐷 Cerdos", f"{total_cerdos:,.0f}")
+            k2.metric("💰 Precio Venta", f"{precio_medio_global:.2f} €/kg")
+            k3.metric("📉 Coste Total", f"{coste_total_kg:.2f} €/kg", delta="Coste fijo", delta_color="inverse")
+            k4.metric("💵 Beneficio", f"{beneficio_total:,.2f} €")
+            k5.metric("📈 Rentabilidad", f"{rentabilidad_kg_global:.2f} €/kg")
+            k6.metric("📊 Margen", f"{margen_pct:.2f}%")
+
+            st.markdown("#### 🍖 Precio Medio por Corte Primario (€/kg)")
+            cp_globales = {}
+            for dets in df['Detalles']:
+                if isinstance(dets, list):
+                    for d in dets:
+                        if isinstance(d, dict):
+                            f = d.get('F', 'Otros')
+                            if f not in cp_globales: cp_globales[f] = []
+                            cp_globales[f].append(d.get('CP', 0))
+            
+            cp_medios_glob = {k: (sum(v)/len(v) if v else 0) for k, v in cp_globales.items()}
+            familias_orden = ['Jamon', 'Paleta', 'Chuleta', 'Panceta', 'Cabeza', 'Papada']
+            cp_cols = st.columns(6)
+            for idx, fam_name in enumerate(familias_orden):
+                val = cp_medios_glob.get(fam_name, 0)
+                label = "Chuleta/Lomo" if fam_name == "Chuleta" else fam_name
+                cp_cols[idx].metric(label, f"{val:.2f} €")
+
+            found_stop = False
+            for l in logs:
+                if "A partir del cerdo" in l: st.warning(l)
+                if "Se agotó" in l: parte = l.split("Se agotó:")[1].strip(); st.error(f"🛑 **ATENCIÓN:** Producción detenida en cerdo {total_cerdos} (FALTAN KG DE {parte.upper()})."); found_stop = True
+            if not found_stop: st.info(f"ℹ️ Estado final: {logs[-1]}")
+
+            with st.expander("📊 Detalle de lote (Gráficos e Inspector)", expanded=True):
+                st.subheader("Evolución de Rentabilidad por Grupos")
+                df_viz = df_filtered if (filtro_art or filtro_cli) else df
                 
-                # --- SOLUCIÓN ERROR PANDAS .STR AÑADIDA AQUÍ ---
-                grp_stats['Num_Grupo'] = pd.to_numeric(grp_stats['Grupo_Label'].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0).astype(int)
-
-                base = alt.Chart(grp_stats).encode(x=alt.X('Grupo_Label', sort=alt.EncodingSortField(field="Num_Grupo", order="ascending"), title="Grupos"), y=alt.Y('Precio_Medio', title="Precio Medio"), tooltip=['Grupo_Label', 'Precio_Medio']).properties(height=400) 
-                bars = base.mark_bar().encode(color=alt.Color('Rentabilidad', scale=alt.Scale(scheme='greens')))
-                linea = alt.Chart(pd.DataFrame({'y': [coste_total_kg]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
-                st.altair_chart((bars + linea).interactive(), use_container_width=True)
-
-                st.divider()
-                st.markdown("### 🔬 Detalle de Grupos")
-                grupos_disponibles = df_viz['Grupo_Label'].unique(); grupo_selec = st.selectbox("Selecciona Grupo:", grupos_disponibles); cerdos_grupo = df_viz[df_viz['Grupo_Label'] == grupo_selec]
-
-                if not cerdos_grupo.empty:
-                    g_cerdos = len(cerdos_grupo); g_ventas = cerdos_grupo['Precio_Total'].sum(); g_coste = g_cerdos * peso * coste_total_kg; g_ben = g_ventas - g_coste; g_pm = cerdos_grupo['Precio_Medio'].mean()
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Cerdos", g_cerdos); c2.metric("Precio Venta", f"{g_pm:.2f} €/kg"); c3.metric("Beneficio Grupo", f"{g_ben:,.2f} €"); c4.metric("Rentabilidad/Kg", f"{(g_pm - coste_total_kg):.2f} €")
-
-                    # --- INDICADORES DE CORTE PRIMARIO POR GRUPO ---
-                    st.markdown("##### 🍖 Precio Medio por Corte Primario en este Grupo (€/kg)")
-                    cp_grupo = {}
-                    for dets in cerdos_grupo['Detalles']:
-                        if isinstance(dets, list):
-                            for d in dets:
-                                if isinstance(d, dict):
-                                    f = d.get('F', 'Otros')
-                                    if f not in cp_grupo: cp_grupo[f] = []
-                                    cp_grupo[f].append(d.get('CP', 0))
+                if df_viz.empty: st.warning("No hay datos para mostrar.")
+                else:
+                    lote_size = st.number_input("Tamaño Grupo", min_value=1, value=100, step=1)
+                    df_viz = df_viz.reset_index(drop=True)
+                    df_viz['Grupo_ID'] = df_viz.index // lote_size
+                    df_viz['Grupo_Label'] = df_viz['Grupo_ID'].apply(lambda x: f"Grupo {x+1}")
                     
-                    cp_medios_grup = {k: (sum(v)/len(v) if v else 0) for k, v in cp_grupo.items()}
-                    gcp_cols = st.columns(6)
-                    for idx, fam_name in enumerate(familias_orden):
-                        val = cp_medios_grup.get(fam_name, 0)
-                        label = "Chuleta/Lomo" if fam_name == "Chuleta" else fam_name
-                        gcp_cols[idx].metric(label, f"{val:.2f} €")
-                    # -----------------------------------------------
+                    grp_stats = df_viz.groupby('Grupo_Label').agg({'Precio_Medio': 'mean'}).reset_index()
+                    grp_stats['Coste'] = coste_total_kg; grp_stats['Rentabilidad'] = grp_stats['Precio_Medio'] - coste_total_kg
+                    grp_stats['Num_Grupo'] = pd.to_numeric(grp_stats['Grupo_Label'].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0).astype(int)
 
-                try:
-                    detalles_flat = []
-                    st.session_state.desgloses_db = {}
-                    for _, row in cerdos_grupo.iterrows():
-                        for d in row['Detalles']:
-                            row_key = f"{d.get('Cod','X')}_{d['P']}_{d['CP']}_{d.get('Origen', 'Real')}"
-                            st.session_state.desgloses_db[row_key] = d['Breakdown']
-                            detalles_flat.append({'Familia': d.get('F', 'Otros'), 'Cliente': d['C'], 'Articulo': d['A'], 'Codigo': d.get('Cod', ''), 'Origen': d.get('Origen', 'Real'), 'Precio_EXW': d['P'], 'Precio_CP': d.get('CP', 0), 'Kg_Usados': d['K'], 'Row_Key': row_key})
+                    base = alt.Chart(grp_stats).encode(x=alt.X('Grupo_Label', sort=alt.EncodingSortField(field="Num_Grupo", order="ascending"), title="Grupos"), y=alt.Y('Precio_Medio', title="Precio Medio"), tooltip=['Grupo_Label', 'Precio_Medio']).properties(height=400) 
+                    bars = base.mark_bar().encode(color=alt.Color('Rentabilidad', scale=alt.Scale(scheme='greens')))
+                    linea = alt.Chart(pd.DataFrame({'y': [coste_total_kg]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
+                    st.altair_chart((bars + linea).interactive(), use_container_width=True)
 
-                    if detalles_flat:
-                        df_detalles = pd.DataFrame(detalles_flat)
-                        resumen = df_detalles.groupby(['Familia', 'Articulo', 'Codigo', 'Cliente', 'Origen', 'Precio_EXW', 'Precio_CP', 'Row_Key']).agg({'Kg_Usados': 'sum'}).reset_index()
-                        grid_resp = mostrar_tabla_aggrid(resumen, currency_cols=['Precio_EXW', 'Precio_CP'], kg_cols=['Kg_Usados'], hidden_cols=['Row_Key'], key='grid_inspector_v2')
-                        csv_detalle = convert_df_to_excel_csv(df_detalles.drop(columns=['Row_Key']))
-                        st.download_button("📥 Descargar Detalle Grupo (CSV)", data=csv_detalle, file_name=f"detalle_{grupo_selec.replace(' ','_')}.csv", mime="text/csv")
+                    st.divider()
+                    st.markdown("### 🔬 Detalle de Grupos")
+                    grupos_disponibles = df_viz['Grupo_Label'].unique(); grupo_selec = st.selectbox("Selecciona Grupo:", grupos_disponibles); cerdos_grupo = df_viz[df_viz['Grupo_Label'] == grupo_selec]
 
-                        sel = grid_resp.get('selected_rows', [])
-                        if isinstance(sel, pd.DataFrame) and not sel.empty: sel = sel.iloc[0].to_dict()
-                        elif isinstance(sel, list) and len(sel) > 0: sel = sel[0]
+                    if not cerdos_grupo.empty:
+                        g_cerdos = len(cerdos_grupo); g_ventas = cerdos_grupo['Precio_Total'].sum(); g_coste = g_cerdos * peso * coste_total_kg; g_ben = g_ventas - g_coste; g_pm = cerdos_grupo['Precio_Medio'].mean()
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Cerdos", g_cerdos); c2.metric("Precio Venta", f"{g_pm:.2f} €/kg"); c3.metric("Beneficio Grupo", f"{g_ben:,.2f} €"); c4.metric("Rentabilidad/Kg", f"{(g_pm - coste_total_kg):.2f} €")
 
-                        if sel and isinstance(sel, dict):
-                            breakdown_data = st.session_state.desgloses_db.get(sel.get('Row_Key'), [])
-                            if breakdown_data:
-                                st.divider()
-                                st.markdown(f"#### Escandallo: **{sel['Articulo']}** (Ref: {breakdown_data[0].get('Escandallo', '')})")
-                                st.caption(f"Desglose REAL de costes (Origen: {sel['Origen']})")
-                                st.dataframe(pd.DataFrame(breakdown_data).style.format({'Precio Aplicado (€)': '{:.2f} €', 'Contribución (€)': '{:.4f} €'}, na_rep=""), use_container_width=True)
+                        st.markdown("##### 🍖 Precio Medio por Corte Primario en este Grupo (€/kg)")
+                        cp_grupo = {}
+                        for dets in cerdos_grupo['Detalles']:
+                            if isinstance(dets, list):
+                                for d in dets:
+                                    if isinstance(d, dict):
+                                        f = d.get('F', 'Otros')
+                                        if f not in cp_grupo: cp_grupo[f] = []
+                                        cp_grupo[f].append(d.get('CP', 0))
+                        
+                        cp_medios_grup = {k: (sum(v)/len(v) if v else 0) for k, v in cp_grupo.items()}
+                        gcp_cols = st.columns(6)
+                        for idx, fam_name in enumerate(familias_orden):
+                            val = cp_medios_grup.get(fam_name, 0)
+                            label = "Chuleta/Lomo" if fam_name == "Chuleta" else fam_name
+                            gcp_cols[idx].metric(label, f"{val:.2f} €")
 
-                except Exception as e: st.error(f"Error detalles: {e}")
+                    try:
+                        detalles_flat = []
+                        st.session_state.desgloses_db = {}
+                        for _, row in cerdos_grupo.iterrows():
+                            for d in row['Detalles']:
+                                row_key = f"{d.get('Cod','X')}_{d['P']}_{d['CP']}_{d.get('Origen', 'Real')}"
+                                st.session_state.desgloses_db[row_key] = d['Breakdown']
+                                detalles_flat.append({'Familia': d.get('F', 'Otros'), 'Cliente': d['C'], 'Articulo': d['A'], 'Codigo': d.get('Cod', ''), 'Origen': d.get('Origen', 'Real'), 'Precio_EXW': d['P'], 'Precio_CP': d.get('CP', 0), 'Kg_Usados': d['K'], 'Row_Key': row_key})
 
-        with st.expander("🏁 Auditoría: Comprobación de Cantidades (Drivers)", expanded=True):
-            audit_data = []
-            for familia, kg_necesarios_cerdo in config.items():
-                if kg_necesarios_cerdo <= 0: continue
-                items = cajones_res.get(familia, [])
-                total_anatomico = sum(x['Kg'] for x in items)
-                total_ventas = sum(x['Kg_Venta_Original'] for x in items)
-                pct_medio = (total_ventas / total_anatomico * 100) if total_anatomico > 0 else 0
-                max_cerdos = total_anatomico / kg_necesarios_cerdo if kg_necesarios_cerdo > 0 else 0
-                audit_data.append({"Familia": familia, "Kg Venta (Neto)": total_ventas, "Rendimiento Medio": pct_medio, "Kg Reconstruidos (Anatómico)": total_anatomico, "Necesidad/Cerdo (Kg)": kg_necesarios_cerdo, "Cerdos Máximos": int(max_cerdos)})
-            if audit_data:
-                df_audit = pd.DataFrame(audit_data).sort_values("Cerdos Máximos")
-                mostrar_tabla_aggrid(df_audit, height=300, kg_cols=["Kg Venta (Neto)", "Kg Reconstruidos (Anatómico)", "Necesidad/Cerdo (Kg)"], pct_cols=["Rendimiento Medio"], num_cols=["Cerdos Máximos"], heatmap_cols=["Cerdos Máximos"], key='grid_audit_v2')
-                st.download_button("📥 Descargar Auditoría", data=convert_df_to_excel_csv(df_audit), file_name="auditoria.csv", mime="text/csv")
+                        if detalles_flat:
+                            df_detalles = pd.DataFrame(detalles_flat)
+                            resumen = df_detalles.groupby(['Familia', 'Articulo', 'Codigo', 'Cliente', 'Origen', 'Precio_EXW', 'Precio_CP', 'Row_Key']).agg({'Kg_Usados': 'sum'}).reset_index()
+                            grid_resp = mostrar_tabla_aggrid(resumen, currency_cols=['Precio_EXW', 'Precio_CP'], kg_cols=['Kg_Usados'], hidden_cols=['Row_Key'], key='grid_inspector_v2')
+                            csv_detalle = convert_df_to_excel_csv(df_detalles.drop(columns=['Row_Key']))
+                            st.download_button("📥 Descargar Detalle Grupo (CSV)", data=csv_detalle, file_name=f"detalle_{grupo_selec.replace(' ','_')}.csv", mime="text/csv")
 
-        with st.expander("🗑️ Auditoría de Secundarios: Inventados (No vendidos)", expanded=True):
-            if not df_audit_sec.empty:
-                df_inv = df_audit_sec[df_audit_sec['Tipo_Casacion'].str.contains("Inventado", case=False, na=False)]
-                if not df_inv.empty:
-                    resumen = df_inv.groupby(['Escandallo_ID', 'Codigo', 'Nombre']).agg({'Kg_Usados': 'sum'}).reset_index()
-                    mostrar_tabla_aggrid(resumen, kg_cols=['Kg_Usados'], key='grid_secundarios_audit')
-                    st.download_button("📥 Descargar Inventados", data=convert_df_to_excel_csv(resumen), file_name="inventados.csv", mime="text/csv")
-                else: st.success("¡Perfecto! Todo se ha vendido o sustituido.")
-            else: st.info("No hay datos disponibles.")
+                            sel = grid_resp.get('selected_rows', [])
+                            if isinstance(sel, pd.DataFrame) and not sel.empty: sel = sel.iloc[0].to_dict()
+                            elif isinstance(sel, list) and len(sel) > 0: sel = sel[0]
 
-        if not df_s.empty:
-            with st.expander("📦 Sobrantes Reales (Stock no utilizado)", expanded=True):
-                cols = ['Familia', 'Codigo', 'Nombre', 'Tipo', 'Kg', 'Motivo']
-                mostrar_tabla_aggrid(df_s[cols], height=500, kg_cols=['Kg'], key='grid_sobrantes_final')
-                st.download_button("📥 Descargar Sobrantes", data=convert_df_to_excel_csv(df_s[cols]), file_name="sobrantes.csv", mime="text/csv")
+                            if sel and isinstance(sel, dict):
+                                breakdown_data = st.session_state.desgloses_db.get(sel.get('Row_Key'), [])
+                                if breakdown_data:
+                                    st.divider()
+                                    st.markdown(f"#### Escandallo: **{sel['Articulo']}** (Ref: {breakdown_data[0].get('Escandallo', '')})")
+                                    st.caption(f"Desglose REAL de costes (Origen: {sel['Origen']})")
+                                    st.dataframe(pd.DataFrame(breakdown_data).style.format({'Precio Aplicado (€)': '{:.2f} €', 'Contribución (€)': '{:.4f} €'}, na_rep=""), use_container_width=True)
+
+                    except Exception as e: st.error(f"Error detalles: {e}")
+
+            with st.expander("🏁 Auditoría: Comprobación de Cantidades (Drivers)", expanded=True):
+                audit_data = []
+                for familia, kg_necesarios_cerdo in config.items():
+                    if kg_necesarios_cerdo <= 0: continue
+                    items = cajones_res.get(familia, [])
+                    total_anatomico = sum(x['Kg'] for x in items)
+                    total_ventas = sum(x['Kg_Venta_Original'] for x in items)
+                    pct_medio = (total_ventas / total_anatomico * 100) if total_anatomico > 0 else 0
+                    max_cerdos = total_anatomico / kg_necesarios_cerdo if kg_necesarios_cerdo > 0 else 0
+                    audit_data.append({"Familia": familia, "Kg Venta (Neto)": total_ventas, "Rendimiento Medio": pct_medio, "Kg Reconstruidos (Anatómico)": total_anatomico, "Necesidad/Cerdo (Kg)": kg_necesarios_cerdo, "Cerdos Máximos": int(max_cerdos)})
+                if audit_data:
+                    df_audit = pd.DataFrame(audit_data).sort_values("Cerdos Máximos")
+                    mostrar_tabla_aggrid(df_audit, height=300, kg_cols=["Kg Venta (Neto)", "Kg Reconstruidos (Anatómico)", "Necesidad/Cerdo (Kg)"], pct_cols=["Rendimiento Medio"], num_cols=["Cerdos Máximos"], heatmap_cols=["Cerdos Máximos"], key='grid_audit_v2')
+                    st.download_button("📥 Descargar Auditoría", data=convert_df_to_excel_csv(df_audit), file_name="auditoria.csv", mime="text/csv")
+
+            with st.expander("🗑️ Auditoría de Secundarios: Inventados (No vendidos)", expanded=True):
+                if not df_audit_sec.empty:
+                    df_inv = df_audit_sec[df_audit_sec['Tipo_Casacion'].str.contains("Inventado", case=False, na=False)]
+                    if not df_inv.empty:
+                        resumen = df_inv.groupby(['Escandallo_ID', 'Codigo', 'Nombre']).agg({'Kg_Usados': 'sum'}).reset_index()
+                        mostrar_tabla_aggrid(resumen, kg_cols=['Kg_Usados'], key='grid_secundarios_audit')
+                        st.download_button("📥 Descargar Inventados", data=convert_df_to_excel_csv(resumen), file_name="inventados.csv", mime="text/csv")
+                    else: st.success("¡Perfecto! Todo se ha vendido o sustituido.")
+                else: st.info("No hay datos disponibles.")
+
+            if not df_s.empty:
+                with st.expander("📦 Sobrantes Reales (Stock no utilizado)", expanded=True):
+                    cols = ['Familia', 'Codigo', 'Nombre', 'Tipo', 'Kg', 'Motivo']
+                    mostrar_tabla_aggrid(df_s[cols], height=500, kg_cols=['Kg'], key='grid_sobrantes_final')
+                    st.download_button("📥 Descargar Sobrantes", data=convert_df_to_excel_csv(df_s[cols]), file_name="sobrantes.csv", mime="text/csv")
+
+
+    # =========================================================
+    # PESTAÑA 2: NUEVO COMPARADOR MULTIESCENARIO (NO TOCA LO ANTERIOR)
+    # =========================================================
+    with tab_sim:
+        st.markdown("### 📊 Comparador de 5 Escenarios")
+        st.caption("Introduce variables para 5 casos distintos y compara sus KPIs globales al instante. (Utiliza el Peso Canal Neto y los Rendimientos definidos en la barra lateral).")
+
+        with st.form("form_multisim"):
+            cols_sim = st.columns(5)
+            sim_params = []
+            
+            for i in range(5):
+                with cols_sim[i]:
+                    st.markdown(f"**Escenario {i+1}**")
+                    ms_pigs = st.number_input("Cerdos a simular", min_value=1, value=1000 + (i*500), step=100, key=f"ms_p_{i}")
+                    ms_price = st.number_input("Precio Canal (€)", min_value=0.0, value=2.10, step=0.01, key=f"ms_pr_{i}")
+                    ms_cost = st.number_input("Coste Ind. (€)", min_value=0.0, value=0.35, step=0.01, key=f"ms_c_{i}")
+                    sim_params.append({'pigs': ms_pigs, 'price': ms_price, 'cost': ms_cost})
+
+            btn_lanzar = st.form_submit_button("🚀 Lanzar 5 Simulaciones", use_container_width=True)
+
+        if btn_lanzar:
+            with st.spinner("Procesando 5 simulaciones en paralelo usando el motor principal. Un momento..."):
+                resultados_ms = []
+                for i, param in enumerate(sim_params):
+                    # Invocamos la función original, obligándola a llegar al target de cerdos de este escenario
+                    df_sim, _, _, _, _, _, _, _ = run_simulation(esc, ven, eq, sus, config, forced_pigs_target=param['pigs'], manual_overrides=st.session_state.manual_prices)
+
+                    if not df_sim.empty:
+                        # Cálculos financieros paralelos para no pisar las variables de la Pestaña 1
+                        t_cerdos = len(df_sim)
+                        t_ventas = df_sim['Precio_Total'].sum()
+                        t_coste_kg = param['price'] + param['cost']
+                        t_costes = t_cerdos * peso * t_coste_kg
+                        ben = t_ventas - t_costes
+                        t_kg_canal = t_cerdos * peso
+                        pm_global = t_ventas / t_kg_canal if t_kg_canal > 0 else 0
+                        margen = (ben / t_ventas) * 100 if t_ventas > 0 else 0
+                        rentabilidad = pm_global - t_coste_kg
+
+                        resultados_ms.append({
+                            'Métrica': [
+                                '🐷 Cerdos Reales Logrados',
+                                '💰 Precio Medio Venta',
+                                '📉 Coste Total Base',
+                                '💵 Beneficio Total',
+                                '📈 Rentabilidad por Kg',
+                                '📊 Margen'
+                            ],
+                            f'Escenario {i+1}': [
+                                f"{t_cerdos:,.0f}",
+                                f"{pm_global:.3f} €/kg",
+                                f"{t_coste_kg:.3f} €/kg",
+                                f"{ben:,.2f} €",
+                                f"{rentabilidad:.3f} €/kg",
+                                f"{margen:.2f} %"
+                            ]
+                        })
+
+                if resultados_ms:
+                    # Reconstruimos una tabla limpia y ordenada
+                    df_comparativa = pd.DataFrame({'Métrica': resultados_ms[0]['Métrica']})
+                    for res in resultados_ms:
+                        esc_name = list(res.keys())[1]
+                        df_comparativa[esc_name] = res[esc_name]
+
+                    st.markdown("#### 🏆 Resultados de la Comparativa")
+                    st.dataframe(df_comparativa, use_container_width=True, hide_index=True)
+                    st.success("¡Simulaciones completadas con éxito!")
