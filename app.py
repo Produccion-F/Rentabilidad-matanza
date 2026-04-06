@@ -52,10 +52,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'PEGAR_AQUI_URL_PRIVADA_ESCANDALLOS'
+URL_VENTAS = 'PEGAR_AQUI_URL_PRIVADA_VENTAS'
+URL_EQUIVALENCIAS = 'PEGAR_AQUI_URL_PRIVADA_EQUIVALENCIAS'
+URL_SUSTITUCIONES = 'PEGAR_AQUI_URL_PRIVADA_SUSTITUCIONES'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
@@ -895,13 +895,13 @@ else:
                     # --- FUNCIÓN PARA COLOREAR EN VERDE/ROJO ---
                     def colorear_metricas(row):
                         estilos = [''] * len(row)
-                        # Solo aplicamos color a las filas de Beneficio y Rentabilidad
-                        if 'Beneficio Total' in str(row['Métrica']) or 'Rentabilidad por Kg' in str(row['Métrica']):
+                        # AÑADIDO: Ahora también revisa si la fila se llama 'Margen'
+                        if 'Beneficio Total' in str(row['Métrica']) or 'Rentabilidad por Kg' in str(row['Métrica']) or 'Margen' in str(row['Métrica']):
                             for i, col_name in enumerate(row.index):
                                 if 'Escenario' in str(col_name):
                                     val_str = str(row[col_name])
-                                    # Limpiamos el texto para poder leer el número matemáticamente
-                                    val_limpio = val_str.replace('€', '').replace('/kg', '').replace(',', '').strip()
+                                    # Limpiamos el texto (incluyendo el símbolo %) para leer el número matemático
+                                    val_limpio = val_str.replace('€', '').replace('/kg', '').replace('%', '').replace(',', '').strip()
                                     try:
                                         val_num = float(val_limpio)
                                         # Aplicamos color según sea positivo o negativo
@@ -914,7 +914,6 @@ else:
                         return estilos
                     # -------------------------------------------
                     
-                    # Aplicamos el estilo a la tabla antes de mostrarla
                     df_estilizado = df_comparativa.style.apply(colorear_metricas, axis=1)
                     st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                     st.success("¡Simulaciones completadas con éxito!")
