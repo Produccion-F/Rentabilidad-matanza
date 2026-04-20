@@ -830,13 +830,12 @@ else:
                     mostrar_tabla_aggrid(df_s[cols], height=500, kg_cols=['Kg'], key='grid_sobrantes_final')
                     st.download_button("📥 Descargar Sobrantes", data=convert_df_to_excel_csv(df_s[cols]), file_name="sobrantes.csv", mime="text/csv")
 
-
-    # =========================================================
-    # PESTAÑA 2: NUEVO COMPARADOR MULTIESCENARIO (NO TOCA LO ANTERIOR)
+  # =========================================================
+    # PESTAÑA 2: NUEVO COMPARADOR MULTIESCENARIO (MEMORIA OPTIMIZADA)
     # =========================================================
     with tab_sim:
         st.markdown("### 📊 Comparador de 5 Escenarios")
-        st.caption("Introduce variables para 5 casos distintos y compara sus KPIs globales al instante. (Utiliza el Peso Canal Neto y los Rendimientos definidos en la barra lateral).")
+        st.caption("Introduce variables para 5 casos distintos y compara sus KPIs globales al instante.")
 
         with st.form("form_multisim"):
             cols_sim = st.columns(5)
@@ -850,11 +849,13 @@ else:
                     ms_cost = st.number_input("Coste Ind. (€)", min_value=0.0, value=0.35, step=0.01, key=f"ms_c_{i}")
                     sim_params.append({'pigs': ms_pigs, 'price': ms_price, 'cost': ms_cost})
 
-            btn_lanzar = st.form_submit_button("🚀 Lanzar 5 Simulaciones", use_container_width=True)
+            btn_lanzar = st.form_submit_button("🚀 Lanzar 5 Simulaciones", width='stretch')
 
         if btn_lanzar:
-            with st.spinner("Procesando 5 simulaciones en paralelo usando el motor principal. Un momento..."):
+            with st.spinner("Procesando 5 simulaciones y limpiando memoria RAM en tiempo real. Un momento..."):
+                import gc # Importamos el camión de la basura de la memoria de Python
                 resultados_ms = []
+                
                 for i, param in enumerate(sim_params):
                     df_sim, _, _, _, _, _, _, _ = run_simulation(esc, ven, eq, sus, config, forced_pigs_target=param['pigs'], manual_overrides=st.session_state.manual_prices)
 
@@ -888,6 +889,11 @@ else:
                             ]
                         })
 
+                    # --- OPCIÓN 1: VACIADO DRÁSTICO DE MEMORIA RAM ---
+                    del df_sim  # Destruye la tabla del escenario procesado
+                    run_simulation.clear()  # Vacía la caché interna de Streamlit
+                    gc.collect()  # Fuerza la limpieza física de la RAM
+
                 if resultados_ms:
                     df_comparativa = pd.DataFrame({'Métrica': resultados_ms[0]['Métrica']})
                     for res in resultados_ms:
@@ -916,5 +922,5 @@ else:
                     # -------------------------------------------
                     
                     df_estilizado = df_comparativa.style.apply(colorear_metricas, axis=1)
-                    st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-                    st.success("¡Simulaciones completadas con éxito!")
+                    st.dataframe(df_estilizado, width='stretch', hide_index=True)
+                    st.success("¡Simulaciones completadas con éxito! Servidor estable.")
