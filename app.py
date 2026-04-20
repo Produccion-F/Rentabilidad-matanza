@@ -101,51 +101,41 @@ def normalizar_texto(texto):
 def convert_df_to_excel_csv(df):
     return df.to_csv(index=False, sep=';', decimal=',').encode('utf-8-sig')
 
-# --- FUNCIÓN DE TABLAS NATIVAS DE STREAMLIT (SIN AGGRID) ---
+# --- FUNCIÓN DE TABLAS NATIVAS DE STREAMLIT (APLICANDO OPCIÓN 2 PARA EVITAR CRASHES) ---
 def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=[], num_cols=[], heatmap_cols=[], hidden_cols=[], key=None, selection_mode='single'):
     display_df = df.copy()
     
-    # Configuración nativa de columnas para que se vean muy visuales
-    col_config = {}
-    
-    # Ocultar columnas nativamente
-    for col in hidden_cols:
-        if col in display_df.columns:
-            col_config[col] = None 
-            
-    # Formatos de número personalizados
+    # Opción 2: Formateamos a texto ANTES de enviar a la tabla para que Streamlit no sufra "crashes"
     for col in currency_cols:
-        if col in display_df.columns: 
-            col_config[col] = st.column_config.NumberColumn(format="%.2f €")
+        if col in display_df.columns and col not in heatmap_cols: 
+            display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f} €".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) else "")
     for col in kg_cols:
-        if col in display_df.columns: 
-            col_config[col] = st.column_config.NumberColumn(format="%.2f kg")
+        if col in display_df.columns and col not in heatmap_cols: 
+            display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f} kg".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) else "")
     for col in pct_cols:
-        if col in display_df.columns: 
-            col_config[col] = st.column_config.NumberColumn(format="%.2f %%")
+        if col in display_df.columns and col not in heatmap_cols: 
+            display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f} %".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) else "")
     for col in num_cols:
-        if col in display_df.columns: 
-            col_config[col] = st.column_config.NumberColumn(format="%d")
+        if col in display_df.columns and col not in heatmap_cols: 
+            display_df[col] = display_df[col].apply(lambda x: f"{int(x)}" if pd.notnull(x) else "")
             
-    # Sustituimos el heatmap de AgGrid por unas Barras de Progreso visuales nativas de Streamlit
+    cols_to_show = [c for c in display_df.columns if c not in hidden_cols]
+    
+    col_config = {}
+    # Blindaje visual: Solo creamos barra de progreso si es un valor matemático puro
     for col in heatmap_cols:
-        if col in display_df.columns:
-            max_val = float(display_df[col].max()) if not display_df.empty else 1.0
+        if col in cols_to_show:
+            max_val = float(df[col].max()) if not df.empty else 1.0
             if pd.isna(max_val) or max_val <= 0: max_val = 1.0
-            col_config[col] = st.column_config.ProgressColumn(
-                format="%d",
-                min_value=0,
-                max_value=max_val
-            )
+            col_config[col] = st.column_config.ProgressColumn(format="%d", min_value=0, max_value=max_val)
 
     toggle_key = f"toggle_full_{key}" if key else f"toggle_full_{id(df)}"
     final_height = height
     if st.checkbox("⤢ Maximizar Tabla", key=toggle_key): final_height = 800
 
-    # Intentamos cargar la tabla interactiva de las nuevas versiones de Streamlit
     try:
         event = st.dataframe(
-            display_df,
+            display_df[cols_to_show],
             height=final_height,
             use_container_width=True,
             column_config=col_config,
@@ -157,20 +147,14 @@ def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=
         selected_rows = []
         if event and hasattr(event, 'selection') and event.selection.rows:
             idx = event.selection.rows[0]
+            # TRAMPA LÓGICA: Devolvemos la fila del DataFrame ORIGINAL (numérico) para no romper la lógica de clics
             selected_rows = [df.iloc[idx].to_dict()]
             
-        # Devolvemos la estructura exacta que esperaba tu código original para no romper NADA
         return {'selected_rows': selected_rows}
         
-    except TypeError:
-        # Fallback de seguridad si el servidor de Streamlit usa una versión antigua
-        st.dataframe(
-            display_df,
-            height=final_height,
-            use_container_width=True,
-            column_config=col_config,
-            key=key
-        )
+    except Exception as e:
+        # Fallback seguro
+        st.dataframe(display_df[cols_to_show], height=final_height, use_container_width=True, key=key)
         return {'selected_rows': []}
 
 # --- CARGA DATOS (VERSIÓN PRIVADA GSPREAD) ---
