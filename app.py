@@ -8,13 +8,6 @@ from google.oauth2.service_account import Credentials
 import re
 import json
 
-# Intentamos importar AgGrid.
-try:
-    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
-    HAS_AGGRID = True
-except ImportError:
-    HAS_AGGRID = False
-
 # --- CONFIGURACIÓN DE PÁGINA Y ESTILOS ---
 st.set_page_config(page_title="Matanza Óptima", layout="wide", page_icon="🐖")
 
@@ -52,10 +45,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'PEGAR_AQUI_URL_PRIVADA_ESCANDALLOS'
+URL_VENTAS = 'PEGAR_AQUI_URL_PRIVADA_VENTAS'
+URL_EQUIVALENCIAS = 'PEGAR_AQUI_URL_PRIVADA_EQUIVALENCIAS'
+URL_SUSTITUCIONES = 'PEGAR_AQUI_URL_PRIVADA_SUSTITUCIONES'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
@@ -70,8 +63,13 @@ def init_gcp_connection():
         return None
 
 def get_df_from_gspread(url):
+    if "PEGAR_AQUI" in url:
+        raise ValueError("URL no configurada. Por favor, pon tu enlace privado en el código.")
+        
     gc = init_gcp_connection()
-    if not gc: return pd.DataFrame()
+    if not gc: 
+        raise ValueError("No se pudo conectar a Google Cloud.")
+        
     base_url = url.split('#')[0]
     match = re.search(r'gid=([0-9]+)', url)
     gid = int(match.group(1)) if match else 0
@@ -79,12 +77,12 @@ def get_df_from_gspread(url):
         sh = gc.open_by_url(base_url)
         ws = next((w for w in sh.worksheets() if w.id == gid), sh.sheet1)
         data = ws.get_all_values()
-        if not data: return pd.DataFrame()
+        if not data: 
+            raise ValueError("El archivo Excel devuelto está completamente vacío.")
         headers = data.pop(0)
         return pd.DataFrame(data, columns=headers)
     except Exception as e:
-        st.error(f"Error al leer la URL {url}. Asegúrate de haberla compartido con el Robot. Error: {e}")
-        return pd.DataFrame()
+        raise Exception(f"No se pudo leer la pestaña (Asegúrate de que el Robot tiene acceso). Detalle: {e}")
 
 # --- FUNCIONES AUXILIARES ---
 def clean_float(x):
@@ -103,60 +101,77 @@ def normalizar_texto(texto):
 def convert_df_to_excel_csv(df):
     return df.to_csv(index=False, sep=';', decimal=',').encode('utf-8-sig')
 
-# --- FUNCIÓN AGRID CON ESTILO EXCEL ---
+# --- FUNCIÓN DE TABLAS NATIVAS DE STREAMLIT (SIN AGGRID) ---
 def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=[], num_cols=[], heatmap_cols=[], hidden_cols=[], key=None, selection_mode='single'):
-    if not HAS_AGGRID:
-        st.dataframe(df, use_container_width=True)
-        return None
-
-    gb = GridOptionsBuilder.from_dataframe(df)
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc='sum', editable=False, filterable=True, sortable=True, resizable=True)
-    gb.configure_selection(selection_mode, use_checkbox=False, rowMultiSelectWithClick=False, suppressRowDeselection=False)
-
-    js_currency = JsCode("""function(params) { if (params.value !== null) return params.value.toLocaleString('es-ES', {style: 'currency', currency: 'EUR'}); return null; }""")
-    js_kg = JsCode("""function(params) { if (params.value !== null) return params.value.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kg'; return null; }""")
-    js_pct = JsCode("""function(params) { if (params.value !== null) return params.value.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%'; return null; }""")
-    js_num = JsCode("""function(params) { if (params.value !== null) return params.value.toLocaleString('es-ES', {maximumFractionDigits: 0}); return null; }""")
-
-    for col in currency_cols: gb.configure_column(col, valueFormatter=js_currency, type=["numericColumn"])
-    for col in kg_cols: gb.configure_column(col, valueFormatter=js_kg, type=["numericColumn"])
-    for col in pct_cols: gb.configure_column(col, valueFormatter=js_pct, type=["numericColumn"])
-    for col in num_cols: gb.configure_column(col, valueFormatter=js_num, type=["numericColumn"])
-    for col in hidden_cols: gb.configure_column(col, hide=True)
-
+    display_df = df.copy()
+    
+    # Configuración nativa de columnas para que se vean muy visuales
+    col_config = {}
+    
+    # Ocultar columnas nativamente
+    for col in hidden_cols:
+        if col in display_df.columns:
+            col_config[col] = None 
+            
+    # Formatos de número personalizados
+    for col in currency_cols:
+        if col in display_df.columns: 
+            col_config[col] = st.column_config.NumberColumn(format="%.2f €")
+    for col in kg_cols:
+        if col in display_df.columns: 
+            col_config[col] = st.column_config.NumberColumn(format="%.2f kg")
+    for col in pct_cols:
+        if col in display_df.columns: 
+            col_config[col] = st.column_config.NumberColumn(format="%.2f %%")
+    for col in num_cols:
+        if col in display_df.columns: 
+            col_config[col] = st.column_config.NumberColumn(format="%d")
+            
+    # Sustituimos el heatmap de AgGrid por unas Barras de Progreso visuales nativas de Streamlit
     for col in heatmap_cols:
-        if col in df.columns:
-            c_min, c_max = df[col].min(), df[col].max()
-            if pd.isna(c_min): c_min = 0
-            if pd.isna(c_max): c_max = 1
-            if c_min == c_max: c_max = c_min + 1
-            js_heatmap = JsCode(f"""function(params) {{
-                if (params.value === null || params.value === undefined) return null;
-                var val = params.value; var min = {c_min}; var max = {c_max};
-                var ratio = (val - min) / (max - min);
-                if (ratio < 0) ratio = 0; if (ratio > 1) ratio = 1;
-                var color1 = [255, 200, 200]; var color2 = [255, 255, 200]; var color3 = [200, 255, 200];
-                var r, g, b;
-                if (ratio < 0.5) {{ var f = ratio * 2; r = color1[0] + f*(color2[0]-color1[0]); g = color1[1] + f*(color2[1]-color1[1]); b = color1[2] + f*(color2[2]-color1[2]); }}
-                else {{ var f = (ratio - 0.5) * 2; r = color2[0] + f*(color3[0]-color2[0]); g = color2[1] + f*(color3[1]-color2[1]); b = color2[2] + f*(color3[2]-color2[2]); }}
-                return {{'backgroundColor': 'rgb(' + Math.floor(r) + ',' + Math.floor(g) + ',' + Math.floor(b) + ')'}};
-            }}""")
-            gb.configure_column(col, cellStyle=js_heatmap)
-
-    grid_options = gb.build()
-    custom_css = {
-        ".ag-header-cell": {"background-color": "#2e7d32 !important", "color": "white !important", "font-weight": "bold"},
-        ".ag-row-odd": {"background-color": "#f1f8e9 !important"},
-        ".ag-row-even": {"background-color": "#ffffff !important"},
-        ".ag-header-cell-text": {"color": "white !important"}
-    }
+        if col in display_df.columns:
+            max_val = float(display_df[col].max()) if not display_df.empty else 1.0
+            if pd.isna(max_val) or max_val <= 0: max_val = 1.0
+            col_config[col] = st.column_config.ProgressColumn(
+                format="%d",
+                min_value=0,
+                max_value=max_val
+            )
 
     toggle_key = f"toggle_full_{key}" if key else f"toggle_full_{id(df)}"
     final_height = height
-    if st.checkbox("⤢ Maximizar Tabla", key=toggle_key): final_height = 1200
+    if st.checkbox("⤢ Maximizar Tabla", key=toggle_key): final_height = 800
 
-    grid_response = AgGrid(df, gridOptions=grid_options, height=final_height, width='100%', data_return_mode=DataReturnMode.AS_INPUT, update_mode=GridUpdateMode.SELECTION_CHANGED, fit_columns_on_grid_load=True, allow_unsafe_jscode=True, theme='balham', custom_css=custom_css, key=key)
-    return grid_response
+    # Intentamos cargar la tabla interactiva de las nuevas versiones de Streamlit
+    try:
+        event = st.dataframe(
+            display_df,
+            height=final_height,
+            use_container_width=True,
+            column_config=col_config,
+            on_select="rerun",
+            selection_mode="single-row",
+            key=key
+        )
+        
+        selected_rows = []
+        if event and hasattr(event, 'selection') and event.selection.rows:
+            idx = event.selection.rows[0]
+            selected_rows = [df.iloc[idx].to_dict()]
+            
+        # Devolvemos la estructura exacta que esperaba tu código original para no romper NADA
+        return {'selected_rows': selected_rows}
+        
+    except TypeError:
+        # Fallback de seguridad si el servidor de Streamlit usa una versión antigua
+        st.dataframe(
+            display_df,
+            height=final_height,
+            use_container_width=True,
+            column_config=col_config,
+            key=key
+        )
+        return {'selected_rows': []}
 
 # --- CARGA DATOS (VERSIÓN PRIVADA GSPREAD) ---
 def load_and_clean_data_raw():
@@ -181,7 +196,7 @@ def load_and_clean_data_raw():
         if 'Escandallo_ID' in df_e.columns and 'Peso' in df_e.columns:
             df_e['Total_Grupo'] = df_e.groupby('Escandallo_ID')['Peso'].transform('sum')
             df_e['Pct_Rendimiento'] = np.where(df_e['Total_Grupo']>0, df_e['Peso']/df_e['Total_Grupo'], 0)
-    except Exception as e: return None, None, None, None, [f"Error Fatal Escandallos: {e}"]
+    except Exception as e: return None, None, None, None, [f"Error en Escandallos: {e}"]
 
     try:
         df_v = get_df_from_gspread(URL_VENTAS)
@@ -198,7 +213,7 @@ def load_and_clean_data_raw():
         if 'Codigo' in df_v.columns: df_v['Codigo'] = df_v['Codigo'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
         for c in ['Kilos', 'Precio']:
             if c in df_v.columns: df_v[c] = df_v[c].apply(clean_float)
-    except Exception as e: return None, None, None, None, [f"Error Fatal Ventas: {e}"]
+    except Exception as e: return None, None, None, None, [f"Error en Ventas: {e}"]
 
     try:
         df_eq = get_df_from_gspread(URL_EQUIVALENCIAS)
@@ -640,7 +655,7 @@ if st.session_state.raw_data is None:
 else:
     esc, ven, eq, sus, err = st.session_state.raw_data
 
-    # --- CREACIÓN DE LAS DOS PESTAÑAS ---
+    # --- CREACIÓN DE LAS DOS PESTAÑAS (RECUPERADAS Y BLINDADAS) ---
     tab_main, tab_sim = st.tabs(["🔬 Análisis Detallado", "📊 Comparador de Escenarios (What-If)"])
 
     # =========================================================
@@ -895,20 +910,17 @@ else:
                     # --- FUNCIÓN PARA COLOREAR EN VERDE/ROJO ---
                     def colorear_metricas(row):
                         estilos = [''] * len(row)
-                        # AÑADIDO: Ahora también revisa si la fila se llama 'Margen'
                         if 'Beneficio Total' in str(row['Métrica']) or 'Rentabilidad por Kg' in str(row['Métrica']) or 'Margen' in str(row['Métrica']):
                             for i, col_name in enumerate(row.index):
                                 if 'Escenario' in str(col_name):
                                     val_str = str(row[col_name])
-                                    # Limpiamos el texto (incluyendo el símbolo %) para leer el número matemático
                                     val_limpio = val_str.replace('€', '').replace('/kg', '').replace('%', '').replace(',', '').strip()
                                     try:
                                         val_num = float(val_limpio)
-                                        # Aplicamos color según sea positivo o negativo
                                         if val_num > 0.0001:
-                                            estilos[i] = 'color: #2e7d32; font-weight: bold;' # Verde
+                                            estilos[i] = 'color: #2e7d32; font-weight: bold;'
                                         elif val_num < -0.0001:
-                                            estilos[i] = 'color: #d32f2f; font-weight: bold;' # Rojo
+                                            estilos[i] = 'color: #d32f2f; font-weight: bold;'
                                     except:
                                         pass
                         return estilos
