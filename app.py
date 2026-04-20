@@ -43,12 +43,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# ⚠️ PON AQUÍ LAS URLs DE TUS EXCELS PRIVADOS (Desde la barra del navegador)
+# ⚠️ URLs INTEGRADAS DIRECTAMENTE DESDE TU CAPTURA
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
+URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjT1-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
+URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
+URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
@@ -64,7 +64,7 @@ def init_gcp_connection():
 
 def get_df_from_gspread(url):
     if "PEGAR_AQUI" in url:
-        raise ValueError("URL no configurada. Por favor, pon tu enlace privado en el código.")
+        raise ValueError("URL no configurada. Por favor, revisa el código.")
         
     gc = init_gcp_connection()
     if not gc: 
@@ -82,7 +82,7 @@ def get_df_from_gspread(url):
         headers = data.pop(0)
         return pd.DataFrame(data, columns=headers)
     except Exception as e:
-        raise Exception(f"No se pudo leer la pestaña (Asegúrate de que el Robot tiene acceso). Detalle: {e}")
+        raise Exception(f"No se pudo leer la pestaña. Detalle: {e}")
 
 # --- FUNCIONES AUXILIARES ---
 def clean_float(x):
@@ -101,11 +101,11 @@ def normalizar_texto(texto):
 def convert_df_to_excel_csv(df):
     return df.to_csv(index=False, sep=';', decimal=',').encode('utf-8-sig')
 
-# --- FUNCIÓN DE TABLAS NATIVAS DE STREAMLIT (APLICANDO OPCIÓN 2 PARA EVITAR CRASHES) ---
+# --- FUNCIÓN DE TABLAS NATIVAS (OPCIÓN 2: FORMATEO SEGURO A TEXTO) ---
 def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=[], num_cols=[], heatmap_cols=[], hidden_cols=[], key=None, selection_mode='single'):
     display_df = df.copy()
     
-    # Opción 2: Formateamos a texto ANTES de enviar a la tabla para que Streamlit no sufra "crashes"
+    # Formateamos a texto ANTES de enviar a la tabla para evitar los crasheos de Streamlit
     for col in currency_cols:
         if col in display_df.columns and col not in heatmap_cols: 
             display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f} €".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) else "")
@@ -122,7 +122,6 @@ def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=
     cols_to_show = [c for c in display_df.columns if c not in hidden_cols]
     
     col_config = {}
-    # Blindaje visual: Solo creamos barra de progreso si es un valor matemático puro
     for col in heatmap_cols:
         if col in cols_to_show:
             max_val = float(df[col].max()) if not df.empty else 1.0
@@ -147,13 +146,11 @@ def mostrar_tabla_aggrid(df, height=400, currency_cols=[], kg_cols=[], pct_cols=
         selected_rows = []
         if event and hasattr(event, 'selection') and event.selection.rows:
             idx = event.selection.rows[0]
-            # TRAMPA LÓGICA: Devolvemos la fila del DataFrame ORIGINAL (numérico) para no romper la lógica de clics
             selected_rows = [df.iloc[idx].to_dict()]
             
         return {'selected_rows': selected_rows}
         
     except Exception as e:
-        # Fallback seguro
         st.dataframe(display_df[cols_to_show], height=final_height, use_container_width=True, key=key)
         return {'selected_rows': []}
 
@@ -639,7 +636,7 @@ if st.session_state.raw_data is None:
 else:
     esc, ven, eq, sus, err = st.session_state.raw_data
 
-    # --- CREACIÓN DE LAS DOS PESTAÑAS (RECUPERADAS Y BLINDADAS) ---
+    # --- CREACIÓN DE LAS DOS PESTAÑAS ---
     tab_main, tab_sim = st.tabs(["🔬 Análisis Detallado", "📊 Comparador de Escenarios (What-If)"])
 
     # =========================================================
@@ -731,6 +728,7 @@ else:
                     
                     grp_stats = df_viz.groupby('Grupo_Label').agg({'Precio_Medio': 'mean'}).reset_index()
                     grp_stats['Coste'] = coste_total_kg; grp_stats['Rentabilidad'] = grp_stats['Precio_Medio'] - coste_total_kg
+                    # SOLUCIÓN DE SEGURIDAD: Convertimos a string primero para evitar el AttributeError de Pandas
                     grp_stats['Num_Grupo'] = pd.to_numeric(grp_stats['Grupo_Label'].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0).astype(int)
 
                     base = alt.Chart(grp_stats).encode(x=alt.X('Grupo_Label', sort=alt.EncodingSortField(field="Num_Grupo", order="ascending"), title="Grupos"), y=alt.Y('Precio_Medio', title="Precio Medio"), tooltip=['Grupo_Label', 'Precio_Medio']).properties(height=400) 
@@ -790,7 +788,13 @@ else:
                                     st.divider()
                                     st.markdown(f"#### Escandallo: **{sel['Articulo']}** (Ref: {breakdown_data[0].get('Escandallo', '')})")
                                     st.caption(f"Desglose REAL de costes (Origen: {sel['Origen']})")
-                                    st.dataframe(pd.DataFrame(breakdown_data).style.format({'Precio Aplicado (€)': '{:.2f} €', 'Contribución (€)': '{:.4f} €'}, na_rep=""), use_container_width=True)
+                                    # Pestaña 1 desglose: Convertimos manualmente a string aquí también
+                                    df_breakdown = pd.DataFrame(breakdown_data)
+                                    if 'Precio Aplicado (€)' in df_breakdown.columns:
+                                        df_breakdown['Precio Aplicado (€)'] = df_breakdown['Precio Aplicado (€)'].apply(lambda x: f"{x:,.2f} €" if pd.notnull(x) else "")
+                                    if 'Contribución (€)' in df_breakdown.columns:
+                                        df_breakdown['Contribución (€)'] = df_breakdown['Contribución (€)'].apply(lambda x: f"{x:,.4f} €" if pd.notnull(x) else "")
+                                    st.dataframe(df_breakdown, use_container_width=True)
 
                     except Exception as e: st.error(f"Error detalles: {e}")
 
