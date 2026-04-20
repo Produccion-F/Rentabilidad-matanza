@@ -70,7 +70,8 @@ def get_df_from_gspread(url):
     if not gc: 
         raise ValueError("No se pudo conectar a Google Cloud.")
         
-    base_url = url.split('#')[0]
+    # Limpieza exhaustiva de la URL para evitar el Error 404 con gspread
+    base_url = url.split('/edit')[0]
     match = re.search(r'gid=([0-9]+)', url)
     gid = int(match.group(1)) if match else 0
     try:
