@@ -45,10 +45,10 @@ st.markdown("""
 # =====================================================================
 # ⚠️ URLs INTEGRADAS DIRECTAMENTE DESDE TU CAPTURA
 # =====================================================================
-URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
-URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjT1-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
-URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
-URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qm1YqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
+URL_ESCANDALLOS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=0#gid=0'
+URL_VENTAS = 'https://docs.google.com/spreadsheets/d/1kyiTFjTl-XxkwhYQlm6FjMbnZWhNR4-AtW3iFj2qXzs/edit?gid=1543847315#gid=1543847315'
+URL_EQUIVALENCIAS = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=1911720872#gid=1911720872'
+URL_SUSTITUCIONES = 'https://docs.google.com/spreadsheets/d/1nGSUQGspPnvkkSD0qmlYqhhfXAEAqbN1vm5DTPhaDkM/edit?gid=69264992#gid=69264992'
 
 # --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
 @st.cache_resource(show_spinner=False)
